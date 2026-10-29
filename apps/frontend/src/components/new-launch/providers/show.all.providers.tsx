@@ -7,6 +7,8 @@ import RedditProvider from '@gitroom/frontend/components/new-launch/providers/re
 import MediumProvider from '@gitroom/frontend/components/new-launch/providers/medium/medium.provider';
 import HashnodeProvider from '@gitroom/frontend/components/new-launch/providers/hashnode/hashnode.provider';
 import FacebookProvider from '@gitroom/frontend/components/new-launch/providers/facebook/facebook.provider';
+import FacebookGroupProvider from '@gitroom/frontend/components/new-launch/providers/facebook-group/facebook-group.provider';
+import FacebookMarketplaceProvider from '@gitroom/frontend/components/new-launch/providers/facebook-marketplace/facebook-marketplace.provider';
 import InstagramProvider from '@gitroom/frontend/components/new-launch/providers/instagram/instagram.collaborators';
 import YoutubeProvider from '@gitroom/frontend/components/new-launch/providers/youtube/youtube.provider';
 import TiktokProvider from '@gitroom/frontend/components/new-launch/providers/tiktok/tiktok.provider';
@@ -73,6 +75,14 @@ export const Providers = [
   {
     identifier: 'facebook',
     component: FacebookProvider,
+  },
+  {
+    identifier: 'facebook-group',
+    component: FacebookGroupProvider,
+  },
+  {
+    identifier: 'facebook-marketplace',
+    component: FacebookMarketplaceProvider,
   },
   {
     identifier: 'instagram',
