@@ -20,6 +20,7 @@ export class JobRunner {
     this.browserManager = browserManager;
     this.timer = null;
     this.running = false;
+    this.lastMutationAt = 0;
   }
 
   start() {
@@ -86,8 +87,19 @@ export class JobRunner {
         return true;
       }
 
+      if (!this.config.mock && this.config.minJobGapSeconds > 0) {
+        const waitMs =
+          this.lastMutationAt +
+          this.config.minJobGapSeconds * 1000 -
+          Date.now();
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+      }
+
       const result = await this.browserManager.withPage(job.profile, async (page) => {
         const markPublishStarted = async () => {
+          this.lastMutationAt = Date.now();
           job = await this.store.save({ ...job, status: 'PUBLISH_STARTED' });
         };
         const context = {
@@ -121,6 +133,28 @@ export class JobRunner {
           current.status === 'PUBLISH_STARTED' &&
           error?.code !== 'PENDING_APPROVAL';
         const code = unknown ? 'UNKNOWN_OUTCOME' : error?.code || 'UNKNOWN_ERROR';
+
+        const safeRetry =
+          current.status === 'RUNNING' &&
+          ['NETWORK_ERROR', 'PAGE_LOAD_FAILED', 'TIMEOUT'].includes(code) &&
+          Number(current.attempts || 0) < 2;
+
+        if (safeRetry) {
+          const retryJob = await this.store.save({
+            ...current,
+            status: 'QUEUED',
+            attempts: Number(current.attempts || 0) + 1,
+            error: {
+              code,
+              message:
+                error?.message ||
+                'Temporary worker error; retrying safely before publish',
+            },
+          });
+          await this.store.enqueue(retryJob.id);
+          return true;
+        }
+
         await this.store.save({
           ...current,
           status: unknown ? 'UNKNOWN_OUTCOME' : terminalStatusFor(code),
