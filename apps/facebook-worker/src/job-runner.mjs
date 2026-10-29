@@ -23,6 +23,22 @@ export class JobRunner {
     this.lastMutationAt = 0;
   }
 
+  log(job, step, status, extra = {}) {
+    console.log(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        service: 'facebook-worker',
+        version: '0.1.0',
+        jobId: job?.id,
+        type: job?.type,
+        profile: job?.profile,
+        step,
+        status,
+        ...extra,
+      })
+    );
+  }
+
   start() {
     if (this.timer) return;
     this.timer = setInterval(() => {
@@ -50,6 +66,7 @@ export class JobRunner {
       job = await this.store.claimNext();
       if (!job) return false;
       if (job.status !== 'QUEUED') return false;
+      this.log(job, 'job_received', 'ok');
 
       lockToken = await this.store.acquireProfileLock(
         job.profile,
@@ -65,6 +82,7 @@ export class JobRunner {
         status: 'RUNNING',
         startedAt: job.startedAt || new Date().toISOString(),
       });
+      this.log(job, 'job_running', 'ok');
 
       if (!this.config.automationEnabled) {
         await this.fail(job, 'AUTOMATION_DISABLED', 'Facebook automation is disabled');
@@ -101,6 +119,9 @@ export class JobRunner {
         const markPublishStarted = async () => {
           this.lastMutationAt = Date.now();
           job = await this.store.save({ ...job, status: 'PUBLISH_STARTED' });
+          this.log(job, 'publish_started', 'ok', {
+            selectorVersion: this.config.selectorVersion,
+          });
         };
         const context = {
           config: this.config,
@@ -116,7 +137,7 @@ export class JobRunner {
         throw new FacebookAutomationError('UNKNOWN_ERROR', 'Unsupported worker job type');
       });
 
-      await this.store.save({
+      const completedJob = await this.store.save({
         ...job,
         status: result.status,
         finishedAt: new Date().toISOString(),
@@ -124,6 +145,9 @@ export class JobRunner {
           remoteId: result.remoteId,
           releaseUrl: result.releaseUrl,
         },
+      });
+      this.log(completedJob, 'job_completed', 'ok', {
+        releaseUrl: result.releaseUrl || '',
       });
       return true;
     } catch (error) {
@@ -152,10 +176,14 @@ export class JobRunner {
             },
           });
           await this.store.enqueue(retryJob.id);
+          this.log(retryJob, 'job_retry_scheduled', 'retry', {
+            code,
+            attempt: retryJob.attempts,
+          });
           return true;
         }
 
-        await this.store.save({
+        const failedJob = await this.store.save({
           ...current,
           status: unknown ? 'UNKNOWN_OUTCOME' : terminalStatusFor(code),
           finishedAt: new Date().toISOString(),
@@ -166,8 +194,10 @@ export class JobRunner {
               : error?.message || 'Unknown worker error',
             screenshotPath: error?.details?.screenshotPath,
             currentUrl: error?.details?.currentUrl,
+            selectorVersion: this.config.selectorVersion,
           },
         });
+        this.log(failedJob, 'job_failed', 'error', { code });
       }
       return true;
     } finally {
@@ -179,11 +209,12 @@ export class JobRunner {
   }
 
   async fail(job, code, message) {
-    await this.store.save({
+    const failedJob = await this.store.save({
       ...job,
       status: 'FAILED',
       finishedAt: new Date().toISOString(),
-      error: { code, message },
+      error: { code, message, selectorVersion: this.config.selectorVersion },
     });
+    this.log(failedJob, 'job_failed', 'error', { code });
   }
 }
