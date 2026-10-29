@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryJobStore } from '../src/job-store.mjs';
 import { JobRunner } from '../src/job-runner.mjs';
+import { FacebookAutomationError } from '../src/facebook.mjs';
 import { createWorkerServer } from '../src/server.mjs';
 
 const config = {
@@ -155,4 +156,35 @@ test('stale recovery retries pre-mutation jobs but never repeats PUBLISH_STARTED
   assert.equal(unknown.status, 'UNKNOWN_OUTCOME');
   assert.equal(unknown.error.code, 'UNKNOWN_OUTCOME');
   assert.equal(store.queue.includes(second.job.id), false);
+});
+
+
+test('temporary pre-publish page errors are retried without creating a new job', async () => {
+  const store = new MemoryJobStore();
+  const retryConfig = {
+    ...config,
+    mock: false,
+    minJobGapSeconds: 0,
+  };
+  const runner = new JobRunner(retryConfig, store, {
+    withPage: async () => {
+      throw new FacebookAutomationError(
+        'PAGE_LOAD_FAILED',
+        'temporary navigation failure'
+      );
+    },
+  });
+
+  const created = await store.createOrGet({
+    idempotencyKey: 'safe-retry-one',
+    type: 'facebook-group-publish',
+    profile: 'default',
+    payload: {},
+  });
+
+  await runner.runOnce();
+  const retried = await store.get(created.job.id);
+  assert.equal(retried.status, 'QUEUED');
+  assert.equal(retried.attempts, 1);
+  assert.equal(store.queue.filter((id) => id === created.job.id).length, 1);
 });
