@@ -190,7 +190,7 @@ services:
     environment:
       FACEBOOK_PROFILE_ROOT: '/data/browser-profiles'
       FACEBOOK_SCREENSHOT_ROOT: '/data/screenshots'
-      FACEBOOK_LOGIN_PROFILE: '${FACEBOOK_LOGIN_PROFILE:-default}'
+      FACEBOOK_LOGIN_PROFILE: "${FACEBOOK_LOGIN_PROFILE:-default}"
       FACEBOOK_HEADLESS: 'false'
     volumes:
       - facebook-worker-data:/data
