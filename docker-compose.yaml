@@ -1,6 +1,11 @@
 services:
   postiz:
-    image: ghcr.io/gitroomhq/postiz-app:latest
+    # This fork contains the custom Facebook Group / Marketplace providers,
+    # so build Postiz from this repository instead of pulling the upstream image.
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: postiz-custom:facebook-automation
     container_name: postiz
     restart: always
     environment:
@@ -50,6 +55,12 @@ services:
       THREADS_APP_SECRET: ''
       FACEBOOK_APP_ID: ''
       FACEBOOK_APP_SECRET: ''
+
+      # === Unofficial Facebook Group / Marketplace browser worker
+      FACEBOOK_WORKER_URL: 'http://facebook-worker:3001'
+      FACEBOOK_WORKER_API_KEY: '${FACEBOOK_WORKER_API_KEY}'
+      FACEBOOK_AUTOMATION_ENABLED: '${FACEBOOK_AUTOMATION_ENABLED:-false}'
+
       YOUTUBE_CLIENT_ID: ''
       YOUTUBE_CLIENT_SECRET: ''
       TIKTOK_CLIENT_ID: ''
@@ -132,6 +143,42 @@ services:
         condition: service_healthy
       postiz-redis:
         condition: service_healthy
+
+  facebook-worker:
+    build:
+      context: .
+      dockerfile: apps/facebook-worker/Dockerfile
+    container_name: postiz-facebook-worker
+    restart: unless-stopped
+    environment:
+      WORKER_API_KEY: '${FACEBOOK_WORKER_API_KEY}'
+      REDIS_URL: 'redis://postiz-redis:6379'
+      FACEBOOK_PROFILE_ROOT: '/data/browser-profiles'
+      FACEBOOK_SCREENSHOT_ROOT: '/data/screenshots'
+      FACEBOOK_AUTOMATION_ENABLED: '${FACEBOOK_AUTOMATION_ENABLED:-false}'
+      FACEBOOK_WORKER_MOCK: '${FACEBOOK_WORKER_MOCK:-false}'
+      FACEBOOK_HEADLESS: '${FACEBOOK_HEADLESS:-true}'
+      FACEBOOK_SELECTOR_VERSION: '${FACEBOOK_SELECTOR_VERSION:-1}'
+    volumes:
+      - facebook-worker-data:/data
+    expose:
+      - '3001'
+    networks:
+      - postiz-network
+    depends_on:
+      postiz-redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   postiz-postgres:
     image: postgres:17-alpine
@@ -269,6 +316,9 @@ volumes:
     external: false
 
   postiz-uploads:
+    external: false
+
+  facebook-worker-data:
     external: false
 
 networks:
