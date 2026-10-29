@@ -1,0 +1,28 @@
+name: Facebook Worker
+
+on:
+  push:
+    paths:
+      - 'apps/facebook-worker/**'
+      - '.github/workflows/facebook-worker.yml'
+  pull_request:
+    paths:
+      - 'apps/facebook-worker/**'
+      - '.github/workflows/facebook-worker.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+      - name: Install worker dependencies
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --prefix apps/facebook-worker --ignore-scripts
+      - name: Syntax check
+        run: npm --prefix apps/facebook-worker run build
+      - name: Unit tests
+        run: npm --prefix apps/facebook-worker test
