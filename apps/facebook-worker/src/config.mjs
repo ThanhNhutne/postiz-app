@@ -22,6 +22,7 @@ export function loadConfig(env = process.env) {
     jobTtlSeconds: numberValue(env.FACEBOOK_JOB_TTL_SECONDS, 604800),
     jobTimeoutSeconds: numberValue(env.FACEBOOK_JOB_TIMEOUT_SECONDS, 180),
     pollIntervalMs: numberValue(env.FACEBOOK_QUEUE_POLL_MS, 750),
+    minJobGapSeconds: numberValue(env.FACEBOOK_MIN_JOB_GAP_SECONDS, 30),
     maxMediaBytes: numberValue(env.FACEBOOK_MAX_MEDIA_BYTES, 25 * 1024 * 1024),
   };
 }
