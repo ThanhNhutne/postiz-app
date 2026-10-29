@@ -4,6 +4,18 @@ import path from 'node:path';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
+function classifyAutomationError(error) {
+  if (error instanceof FacebookAutomationError) return error.code;
+  const message = String(error?.message || '');
+  if (error?.name === 'TimeoutError' || /timed? ?out|timeout/i.test(message)) {
+    return 'TIMEOUT';
+  }
+  if (/net::ERR_|ECONNRESET|ECONNREFUSED|ENETUNREACH|EAI_AGAIN/i.test(message)) {
+    return 'NETWORK_ERROR';
+  }
+  return 'UNKNOWN_ERROR';
+}
+
 export class FacebookAutomationError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -250,7 +262,16 @@ async function validateGroupPage(page, groupUrl) {
     );
   }
 
-  await page.goto(groupUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  try {
+    await page.goto(groupUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  } catch (error) {
+    throw new FacebookAutomationError(
+      classifyAutomationError(error) === 'TIMEOUT'
+        ? 'TIMEOUT'
+        : 'PAGE_LOAD_FAILED',
+      error?.message || 'Could not load the Facebook group'
+    );
+  }
   await ensureSession(page);
   const text = await bodyText(page);
 
@@ -425,7 +446,7 @@ export async function publishGroup(page, payload, context) {
       releaseUrl: confirmedUrl,
     };
   } catch (error) {
-    const code = error?.code || 'UNKNOWN_ERROR';
+    const code = classifyAutomationError(error);
     const screenshotPath = await screenshot(
       page,
       context.config,
@@ -451,10 +472,19 @@ export async function publishGroup(page, payload, context) {
 }
 
 export async function validateMarketplace(page) {
-  await page.goto('https://www.facebook.com/marketplace/create/item', {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000,
-  });
+  try {
+    await page.goto('https://www.facebook.com/marketplace/create/item', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+  } catch (error) {
+    throw new FacebookAutomationError(
+      classifyAutomationError(error) === 'TIMEOUT'
+        ? 'TIMEOUT'
+        : 'PAGE_LOAD_FAILED',
+      error?.message || 'Could not load Facebook Marketplace'
+    );
+  }
   await ensureSession(page);
   const text = await bodyText(page);
   if (
@@ -612,7 +642,7 @@ export async function publishMarketplace(page, payload, context) {
       releaseUrl,
     };
   } catch (error) {
-    const code = error?.code || 'UNKNOWN_ERROR';
+    const code = classifyAutomationError(error);
     const screenshotPath = await screenshot(
       page,
       context.config,
