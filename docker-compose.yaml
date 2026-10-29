@@ -136,6 +136,19 @@ services:
       - postiz-uploads:/uploads/
     ports:
       - '4007:5000'
+    healthcheck:
+      # Postiz frontend/backend readiness
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "Promise.all([fetch('http://127.0.0.1:4200/auth'),fetch('http://127.0.0.1:3000/auth/can-register')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
     networks:
       - postiz-network
       - temporal-network
