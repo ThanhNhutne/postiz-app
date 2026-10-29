@@ -139,3 +139,18 @@ This repository's source code is available under the [AGPL-3.0 license](LICENSE)
 <p align="center">
   <img src="https://github.com/snyk-labs/secure-developer-sample-repo/raw/main/badge_full.svg" alt="Secure Developer Badge Full" width="150">
 </p>
+
+
+## Facebook Group / Marketplace Browser Automation (custom fork)
+
+This fork adds **unofficial** Facebook Group and Facebook Marketplace publishing through a separate Playwright/Chromium worker. These integrations do not use the deprecated Facebook Groups API and are not official Meta integrations.
+
+- Postiz remains the content, media, calendar and scheduling control plane.
+- Each Facebook Group is connected as a separate Postiz channel.
+- Marketplace is connected per persistent browser profile.
+- Redis-backed worker jobs are idempotent and serialized per Facebook profile.
+- CAPTCHA, security checkpoints and expired sessions stop automation and require manual user action.
+- The worker never stores a Facebook password and does not implement CAPTCHA bypass, stealth fingerprinting or anti-detection evasion.
+- Browser automation can break when Facebook changes its UI and may be subject to Facebook terms/restrictions.
+
+See [docs/facebook-automation/REAL-ACCEPTANCE.md](docs/facebook-automation/REAL-ACCEPTANCE.md) before enabling live publishing.
