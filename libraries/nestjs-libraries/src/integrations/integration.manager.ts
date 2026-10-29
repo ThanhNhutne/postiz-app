@@ -9,6 +9,8 @@ import { DevToProvider } from '@gitroom/nestjs-libraries/integrations/social/dev
 import { HashnodeProvider } from '@gitroom/nestjs-libraries/integrations/social/hashnode.provider';
 import { MediumProvider } from '@gitroom/nestjs-libraries/integrations/social/medium.provider';
 import { FacebookProvider } from '@gitroom/nestjs-libraries/integrations/social/facebook.provider';
+import { FacebookGroupProvider } from '@gitroom/nestjs-libraries/integrations/social/facebook.group.provider';
+import { FacebookMarketplaceProvider } from '@gitroom/nestjs-libraries/integrations/social/facebook.marketplace.provider';
 import { InstagramProvider } from '@gitroom/nestjs-libraries/integrations/social/instagram.provider';
 import { YoutubeProvider } from '@gitroom/nestjs-libraries/integrations/social/youtube.provider';
 import { TiktokProvider } from '@gitroom/nestjs-libraries/integrations/social/tiktok.provider';
@@ -47,6 +49,8 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new InstagramProvider(),
   new InstagramStandaloneProvider(),
   new FacebookProvider(),
+  new FacebookGroupProvider(),
+  new FacebookMarketplaceProvider(),
   new ThreadsProvider(),
   new YoutubeProvider(),
   new GmbProvider(),
