@@ -38,6 +38,8 @@ jobs:
         run: npm --prefix apps/facebook-worker test
       - name: Mock Redis / HTTP E2E
         run: npm --prefix apps/facebook-worker run test:e2e
+      - name: Build worker container
+        run: docker build -f apps/facebook-worker/Dockerfile -t postiz-facebook-worker:ci .
       - name: Validate Docker Compose
         env:
           FACEBOOK_WORKER_API_KEY: ci-test-key

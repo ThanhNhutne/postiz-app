@@ -52,3 +52,10 @@ Live browser mutations are disabled unless both Postiz and the worker receive:
 `FACEBOOK_AUTOMATION_ENABLED=true`
 
 Default is `false`.
+
+
+## noVNC login surface
+
+The optional `facebook-worker-login` Compose profile binds noVNC to `127.0.0.1:6080` only and intentionally has no public listener. For a remote server, access it only through an SSH tunnel.
+
+Stop the normal worker before starting the login container because both services share the same Chromium profile volume. Never expose noVNC through a public reverse proxy.

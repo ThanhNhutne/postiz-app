@@ -17,21 +17,47 @@ Build/start the custom fork and worker.
 
 ## 2. Create the Facebook browser profile
 
-The first login must run where Chromium can be viewed/interacted with.
+The preferred production login flow is the optional noVNC login container. It shares the same persistent browser-profile volume as the worker, but its web UI is bound to localhost only.
 
-Worker command:
+First stop the normal worker so two Chromium processes never open the same profile:
+
+```bash
+docker compose stop facebook-worker
+docker compose --profile facebook-login up --build facebook-worker-login
+```
+
+If Docker runs on the same machine, open:
+
+`http://127.0.0.1:6080/vnc.html`
+
+If Docker runs on a remote VPS, create an SSH tunnel from your workstation:
+
+```bash
+ssh -L 6080:127.0.0.1:6080 <user>@<postiz-server>
+```
+
+Then open the same local URL in your browser.
+
+Complete Facebook login, 2FA and any security checkpoint manually inside Chromium. The login process prints:
+
+`PROFILE_READY default`
+
+Stop the login container, then restart the normal worker:
+
+```bash
+docker compose --profile facebook-login stop facebook-worker-login
+docker compose up -d facebook-worker
+```
+
+The noVNC port is intentionally never bound to a public interface. Do not reverse-proxy or expose port 6080 to the Internet.
+
+For a non-Docker development machine with a graphical desktop, the direct CLI remains available:
 
 ```bash
 npm --prefix apps/facebook-worker install
 FACEBOOK_PROFILE_ROOT=./facebook-worker-data/browser-profiles \
 npm --prefix apps/facebook-worker run browser:login -- --profile default
 ```
-
-Complete Facebook login, 2FA and any checkpoint manually. The CLI prints:
-
-`PROFILE_READY default`
-
-On a headless VPS, create the profile on a trusted GUI machine and transfer the profile directory securely to the worker's persistent `/data/browser-profiles/default` volume, or provide a trusted GUI/noVNC session for the worker. Do not send the profile through Git or public file sharing.
 
 ## 3. Enable live mutations
 

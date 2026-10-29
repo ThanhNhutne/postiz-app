@@ -180,6 +180,27 @@ services:
       timeout: 5s
       retries: 5
 
+  facebook-worker-login:
+    build:
+      context: .
+      dockerfile: apps/facebook-worker/Dockerfile
+    container_name: postiz-facebook-worker-login
+    profiles:
+      - facebook-login
+    environment:
+      FACEBOOK_PROFILE_ROOT: '/data/browser-profiles'
+      FACEBOOK_SCREENSHOT_ROOT: '/data/screenshots'
+      FACEBOOK_LOGIN_PROFILE: '${FACEBOOK_LOGIN_PROFILE:-default}'
+      FACEBOOK_HEADLESS: 'false'
+    volumes:
+      - facebook-worker-data:/data
+    ports:
+      # Localhost only. For a remote VPS, use an SSH tunnel to 6080.
+      - '127.0.0.1:6080:6080'
+    command: ['/app/bin/login-novnc.sh']
+    networks:
+      - postiz-network
+
   postiz-postgres:
     image: postgres:17-alpine
     container_name: postiz-postgres
