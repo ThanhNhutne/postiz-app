@@ -14,7 +14,7 @@ export class FacebookAutomationError extends Error {
 }
 
 const RX = {
-  createPost: /Create post|Tạo bài viết/i,
+  createPost: /Create post|Tạo bài viết|Write something|Bạn viết gì đi/i,
   post: /^(Post|Đăng)$/i,
   photoVideo: /Photo\/video|Ảnh\/video/i,
   title: /Title|Tiêu đề/i,
@@ -361,29 +361,68 @@ export async function publishGroup(page, payload, context) {
       );
     }
 
+    const beforeLinks = new Set(
+      await page
+        .locator('a[href*="/posts/"]')
+        .evaluateAll((nodes) => nodes.map((node) => node.href).filter(Boolean))
+        .catch(() => [])
+    );
+
     await context.markPublishStarted();
     await postButton.click();
-    await page.waitForTimeout(1500);
 
-    const text = await bodyText(page);
-    const pendingApproval =
-      /pending approval|awaiting approval|đang chờ phê duyệt|chờ quản trị viên phê duyệt/i.test(
-        text
+    let releaseUrl = '';
+    let pendingApproval = false;
+    let explicitSuccess = false;
+    const deadline = Date.now() + 12_000;
+
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(500);
+      const text = await bodyText(page);
+      pendingApproval =
+        /pending approval|awaiting approval|đang chờ phê duyệt|chờ quản trị viên phê duyệt/i.test(
+          text
+        );
+      explicitSuccess =
+        /your post (?:is now )?published|your post was published|bài viết của bạn đã được đăng/i.test(
+          text
+        );
+
+      const links = await page
+        .locator('a[href*="/posts/"]')
+        .evaluateAll((nodes) => nodes.map((node) => node.href).filter(Boolean))
+        .catch(() => []);
+      releaseUrl =
+        links.find(
+          (href) =>
+            !beforeLinks.has(href) &&
+            (!group.groupId || href.includes('/groups/' + group.groupId + '/'))
+        ) || '';
+
+      if (releaseUrl || pendingApproval || explicitSuccess) break;
+    }
+
+    if (pendingApproval) {
+      return {
+        status: 'PENDING_APPROVAL',
+        remoteId: context.jobId,
+        releaseUrl: releaseUrl || payload.groupUrl,
+      };
+    }
+
+    if (!releaseUrl && !explicitSuccess) {
+      throw new FacebookAutomationError(
+        'UNKNOWN_OUTCOME',
+        'Facebook accepted the Post click but the new group post could not be confirmed'
       );
+    }
 
-    const links = await page
-      .locator('a[href*="/posts/"]')
-      .evaluateAll((nodes) => nodes.map((node) => node.href).filter(Boolean))
-      .catch(() => []);
-    const releaseUrl =
-      links.find((href) => href.includes('/groups/' + group.groupId + '/')) ||
-      links[0] ||
-      payload.groupUrl;
-
+    const confirmedUrl = releaseUrl || payload.groupUrl;
     return {
-      status: pendingApproval ? 'PENDING_APPROVAL' : 'SUCCESS',
-      remoteId: releaseUrl.match(/\/posts\/([^/?]+)/)?.[1] || context.jobId,
-      releaseUrl,
+      status: 'SUCCESS',
+      remoteId:
+        confirmedUrl.match(/\/posts\/([^/?]+)/)?.[1] || context.jobId,
+      releaseUrl: confirmedUrl,
     };
   } catch (error) {
     const code = error?.code || 'UNKNOWN_ERROR';

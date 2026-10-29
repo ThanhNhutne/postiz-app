@@ -9,6 +9,7 @@ assertConfig(config);
 
 const store = new RedisJobStore(config.redisUrl, config.jobTtlSeconds);
 await store.connect();
+await store.recoverStaleJobs(config.jobTimeoutSeconds);
 
 const browserManager = new BrowserManager(config);
 const runner = new JobRunner(config, store, browserManager);

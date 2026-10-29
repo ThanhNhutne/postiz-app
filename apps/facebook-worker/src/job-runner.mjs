@@ -48,6 +48,7 @@ export class JobRunner {
     try {
       job = await this.store.claimNext();
       if (!job) return false;
+      if (job.status !== 'QUEUED') return false;
 
       lockToken = await this.store.acquireProfileLock(
         job.profile,

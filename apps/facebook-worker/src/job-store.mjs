@@ -93,7 +93,70 @@ export class RedisJobStore {
   }
 
   async enqueue(id) {
-    await this.redis.rpush(QUEUE_KEY, id);
+    const existing = await this.redis.lpos(QUEUE_KEY, id);
+    if (existing === null) {
+      await this.redis.rpush(QUEUE_KEY, id);
+    }
+  }
+
+  async recoverStaleJobs(timeoutSeconds) {
+    const staleMs = timeoutSeconds * 1000;
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        JOB_PREFIX + '*',
+        'COUNT',
+        100
+      );
+      cursor = nextCursor;
+
+      for (const key of keys) {
+        const raw = await this.redis.get(key);
+        if (!raw) continue;
+
+        let job;
+        try {
+          job = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+
+        const updated = new Date(
+          job.updatedAt || job.startedAt || job.createdAt
+        ).getTime();
+        const stale = !Number.isFinite(updated) || Date.now() - updated >= staleMs;
+
+        if (job.status === 'QUEUED') {
+          await this.enqueue(job.id);
+          continue;
+        }
+
+        if (job.status === 'RUNNING' && stale) {
+          const recovered = await this.save({
+            ...job,
+            status: 'QUEUED',
+            startedAt: undefined,
+          });
+          await this.enqueue(recovered.id);
+          continue;
+        }
+
+        if (job.status === 'PUBLISH_STARTED' && stale) {
+          await this.save({
+            ...job,
+            status: 'UNKNOWN_OUTCOME',
+            finishedAt: new Date().toISOString(),
+            error: {
+              code: 'UNKNOWN_OUTCOME',
+              message:
+                'Worker restarted after the Facebook publish mutation began. Check Facebook before retrying.',
+            },
+          });
+        }
+      }
+    } while (cursor !== '0');
   }
 
   async claimNext() {
@@ -156,7 +219,45 @@ export class MemoryJobStore {
   }
 
   async get(id) { return this.jobs.get(id) || null; }
-  async enqueue(id) { this.queue.push(id); }
+  async enqueue(id) {
+    if (!this.queue.includes(id)) this.queue.push(id);
+  }
+
+  async recoverStaleJobs(timeoutSeconds) {
+    const staleMs = timeoutSeconds * 1000;
+    for (const [id, job] of this.jobs.entries()) {
+      const updated = new Date(
+        job.updatedAt || job.startedAt || job.createdAt
+      ).getTime();
+      const stale = !Number.isFinite(updated) || Date.now() - updated >= staleMs;
+
+      if (job.status === 'QUEUED') {
+        await this.enqueue(id);
+      } else if (job.status === 'RUNNING' && stale) {
+        const recovered = {
+          ...job,
+          status: 'QUEUED',
+          startedAt: undefined,
+          updatedAt: new Date().toISOString(),
+        };
+        this.jobs.set(id, recovered);
+        await this.enqueue(id);
+      } else if (job.status === 'PUBLISH_STARTED' && stale) {
+        this.jobs.set(id, {
+          ...job,
+          status: 'UNKNOWN_OUTCOME',
+          finishedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          error: {
+            code: 'UNKNOWN_OUTCOME',
+            message:
+              'Worker restarted after the Facebook publish mutation began. Check Facebook before retrying.',
+          },
+        });
+      }
+    }
+  }
+
   async claimNext() {
     const id = this.queue.shift();
     return id ? this.get(id) : null;

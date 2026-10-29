@@ -116,3 +116,43 @@ test('HTTP API protects worker routes and accepts idempotent jobs', async () => 
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+
+test('stale recovery retries pre-mutation jobs but never repeats PUBLISH_STARTED', async () => {
+  const store = new MemoryJobStore();
+  const first = await store.createOrGet({
+    idempotencyKey: 'stale-running',
+    type: 'facebook-group-publish',
+    profile: 'default',
+    payload: {},
+  });
+  await store.claimNext();
+  store.jobs.set(first.job.id, {
+    ...first.job,
+    status: 'RUNNING',
+    updatedAt: new Date(Date.now() - 60_000).toISOString(),
+  });
+
+  const second = await store.createOrGet({
+    idempotencyKey: 'stale-publish-started',
+    type: 'facebook-group-publish',
+    profile: 'default',
+    payload: {},
+  });
+  await store.claimNext();
+  store.jobs.set(second.job.id, {
+    ...second.job,
+    status: 'PUBLISH_STARTED',
+    updatedAt: new Date(Date.now() - 60_000).toISOString(),
+  });
+
+  await store.recoverStaleJobs(1);
+
+  assert.equal((await store.get(first.job.id)).status, 'QUEUED');
+  assert.ok(store.queue.includes(first.job.id));
+
+  const unknown = await store.get(second.job.id);
+  assert.equal(unknown.status, 'UNKNOWN_OUTCOME');
+  assert.equal(unknown.error.code, 'UNKNOWN_OUTCOME');
+  assert.equal(store.queue.includes(second.job.id), false);
+});
