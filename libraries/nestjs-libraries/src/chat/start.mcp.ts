@@ -70,7 +70,18 @@ export const startMcp = async (app: INestApplication) => {
     Object.entries(tools).filter(([name]) => !claudeHiddenTools.includes(name))
   ) as typeof tools;
 
-  const backendUrl = process.env.NEXT_PUBLIC_OVERRIDE_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+  const configuredBackendUrl =
+    process.env.NEXT_PUBLIC_OVERRIDE_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    '/api';
+  const publicOrigin =
+    process.env.MAIN_URL ||
+    process.env.FRONTEND_URL ||
+    'http://localhost:5000';
+  const backendUrl = new URL(configuredBackendUrl, publicOrigin).toString().replace(/\/$/, '');
+  const backendEndpoint = (path: string) =>
+    new URL(path.replace(/^\//, ''), backendUrl + '/');
+
   // this runs before the backend listens: a bucket url that doesn't parse only
   // costs the widget its thumbnails, never the boot
   let storageOrigin: string | undefined;
@@ -84,9 +95,9 @@ export const startMcp = async (app: INestApplication) => {
     [UPLOAD_WIDGET_URI]: {
       name: 'Upload Media',
       description: 'Upload an image or video from the device to the media library',
-      html: uploadWidgetHtml(backendUrl!),
+      html: uploadWidgetHtml(backendUrl),
       meta: {
-        csp: { connectDomains: [new URL(backendUrl!).origin] },
+        csp: { connectDomains: [new URL(backendUrl).origin] },
         // the "Copy link" button of the uploaded media
         permissions: { clipboardWrite: {} },
         prefersBorder: true,
@@ -97,10 +108,10 @@ export const startMcp = async (app: INestApplication) => {
           [CLIPPING_WIDGET_URI]: {
             name: 'Video Clipping',
             description: 'Progress of a video clipping and the clips it made',
-            html: clippingWidgetHtml(backendUrl!),
+            html: clippingWidgetHtml(backendUrl),
             meta: {
               csp: {
-                connectDomains: [new URL(backendUrl!).origin],
+                connectDomains: [new URL(backendUrl).origin],
                 // the thumbnails of the clips live wherever the storage serves files
                 ...(storageOrigin ? { resourceDomains: [storageOrigin] } : {}),
               },
@@ -152,11 +163,11 @@ export const startMcp = async (app: INestApplication) => {
   // self-registering client
   const authorizationServers: Record<string, { issuer: string; registration: boolean }> = {
     '/mcp-oauth-chatgpt': {
-      issuer: new URL('/mcp-oauth-chatgpt', process.env.NEXT_PUBLIC_BACKEND_URL!).toString(),
+      issuer: backendEndpoint('/mcp-oauth-chatgpt').toString(),
       registration: false,
     },
     '/mcp-oauth-dynamic': {
-      issuer: new URL('/mcp-oauth-dynamic', process.env.NEXT_PUBLIC_BACKEND_URL!).toString(),
+      issuer: backendEndpoint('/mcp-oauth-dynamic').toString(),
       registration: true,
     },
   };
@@ -186,7 +197,7 @@ export const startMcp = async (app: INestApplication) => {
   const createResourceMiddleware = (mcpPath: string, authorizationServer: string) =>
     createOAuthMiddleware({
       oauth: {
-        resource: new URL(mcpPath, process.env.NEXT_PUBLIC_BACKEND_URL!).toString(),
+        resource: backendEndpoint(mcpPath).toString(),
         authorizationServers: [authorizationServers[authorizationServer].issuer],
         scopesSupported: oauthScopes,
         validateToken: async (token: string) => {
@@ -232,7 +243,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL('/.well-known/oauth-protected-resource', process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = backendEndpoint('/.well-known/oauth-protected-resource');
     await resource.middleware(req, res, url);
   });
 
@@ -289,7 +300,7 @@ export const startMcp = async (app: INestApplication) => {
 
     // baseUrl is the mount path that matched, e.g. /mcp-oauth-claude
     const { middleware, mcpServer } = oauthResources[req.baseUrl];
-    const url = new URL(req.baseUrl, process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = backendEndpoint(req.baseUrl);
 
     const result = await middleware(req, res, url);
     if (!result.proceed) return;
@@ -348,7 +359,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL('/mcp', process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = backendEndpoint('/mcp');
 
     fixAcceptHeader(req);
     // @ts-ignore
@@ -386,10 +397,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL(
-      `/mcp/${req.params.id}`,
-      process.env.NEXT_PUBLIC_BACKEND_URL
-    );
+    const url = backendEndpoint(`/mcp/${req.params.id}`);
 
     fixAcceptHeader(req);
     await runWithContext(
@@ -430,7 +438,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL(req.originalUrl, process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = backendEndpoint(req.originalUrl);
 
     await runWithContext(
       // @ts-ignore

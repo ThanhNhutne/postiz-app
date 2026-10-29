@@ -1,0 +1,20 @@
+{
+  "name": "postiz-facebook-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "find src tests -name '*.mjs' -print0 | xargs -0 -n1 node --check",
+    "browser:login": "node src/cli/login.mjs",
+    "test:e2e": "node tests/mock-e2e.mjs"
+  },
+  "dependencies": {
+    "ioredis": "5.3.2",
+    "playwright": "1.64.1"
+  }
+}

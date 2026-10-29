@@ -27,6 +27,30 @@ services:
       - 6379:6379
     networks:
       - postiz-network
+  facebook-worker:
+    build:
+      context: .
+      dockerfile: apps/facebook-worker/Dockerfile
+    container_name: postiz-facebook-worker
+    restart: unless-stopped
+    environment:
+      WORKER_API_KEY: '${FACEBOOK_WORKER_API_KEY}'
+      REDIS_URL: 'redis://postiz-redis:6379'
+      FACEBOOK_PROFILE_ROOT: '/data/browser-profiles'
+      FACEBOOK_SCREENSHOT_ROOT: '/data/screenshots'
+      FACEBOOK_AUTOMATION_ENABLED: '${FACEBOOK_AUTOMATION_ENABLED:-false}'
+      FACEBOOK_WORKER_MOCK: '${FACEBOOK_WORKER_MOCK:-true}'
+      FACEBOOK_HEADLESS: '${FACEBOOK_HEADLESS:-true}'
+      FACEBOOK_SELECTOR_VERSION: '${FACEBOOK_SELECTOR_VERSION:-1}'
+    volumes:
+      - facebook-worker-data:/data
+    ports:
+      - '3001:3001'
+    networks:
+      - postiz-network
+    depends_on:
+      - postiz-redis
+
   postiz-pg-admin:
     # ref: https://hub.docker.com/r/dpage/pgadmin4/tags
     image: dpage/pgadmin4:latest
@@ -136,6 +160,7 @@ services:
 
 volumes:
   redisinsight:
+  facebook-worker-data:
   postgres-volume:
     external: false
 
