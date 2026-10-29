@@ -15,6 +15,7 @@ function newJob(input) {
     profile: input.profile,
     status: 'QUEUED',
     payload: input.payload,
+    attempts: 0,
     createdAt: now,
     updatedAt: now,
   };
